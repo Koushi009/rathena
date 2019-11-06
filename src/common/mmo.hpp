@@ -152,7 +152,6 @@
 #define EL_CLASS_MAX (EL_CLASS_BASE+MAX_ELEMENTAL_CLASS-1)
 
 //Achievement System
-#define MAX_ACHIEVEMENT_RANK 20 /// Maximum achievement level
 #define MAX_ACHIEVEMENT_OBJECTIVES 10 /// Maximum different objectives in achievement_db.yml
 #define MAX_ACHIEVEMENT_DEPENDENTS 20 /// Maximum different dependents in achievement_db.yml
 #define ACHIEVEMENT_NAME_LENGTH 50 /// Max Achievement Name length
@@ -407,6 +406,7 @@ struct s_pet {
 	char name[NAME_LENGTH];
 	char rename_flag;
 	char incubate;
+	bool autofeed;
 };
 
 struct s_homunculus {	//[orn]
@@ -1027,7 +1027,7 @@ struct clan{
 #error MAX_ZENY is too big
 #endif
 
-// This sanity check is required, because some other places(like skill.c) rely on this
+// This sanity check is required, because some other places(like skill.cpp) rely on this
 #if MAX_PARTY < 2
 #error MAX_PARTY is too small, you need at least 2 players for a party
 #endif
