@@ -3,12 +3,12 @@
 
 #include "socket.hpp"
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #ifdef WIN32
 	#include "winapi.hpp"
 #else
-	#include <errno.h>
+	#include <cerrno>
 	#include <arpa/inet.h>
 	#include <net/if.h>
 	#include <netdb.h>
@@ -46,6 +46,10 @@
 #include "showmsg.hpp"
 #include "strlib.hpp"
 #include "timer.hpp"
+
+// Reuseable global packet buffer to prevent too many allocations
+// Take socket.cpp::socket_max_client_packet into consideration
+int8 packet_buffer[UINT16_MAX];
 
 /////////////////////////////////////////////////////////////////////
 #if defined(WIN32)
@@ -428,6 +432,8 @@ int send_from_fifo(int fd)
 
 	if( len > 0 )
 	{
+		session[fd]->wdata_tick = last_tick;
+
 		// some data could not be transferred?
 		// shift unsent data to the beginning of the queue
 		if( (size_t)len < session[fd]->wdata_size )
@@ -587,6 +593,7 @@ int make_listen_bind(uint32 ip, uint16 port)
 	create_session(fd, connect_client, null_send, null_parse);
 	session[fd]->client_addr = 0; // just listens
 	session[fd]->rdata_tick = 0; // disable timeouts on this socket
+	session[fd]->wdata_tick = 0;
 
 	return fd;
 }
@@ -727,6 +734,7 @@ static int create_session(int fd, RecvFunc func_recv, SendFunc func_send, ParseF
 	session[fd]->func_send  = func_send;
 	session[fd]->func_parse = func_parse;
 	session[fd]->rdata_tick = last_tick;
+	session[fd]->wdata_tick = last_tick;
 	return 0;
 }
 
@@ -746,25 +754,23 @@ static void delete_session(int fd)
 	}
 }
 
-int realloc_fifo(int fd, unsigned int rfifo_size, unsigned int wfifo_size)
-{
+int _realloc_fifo( int fd, unsigned int rfifo_size, unsigned int wfifo_size, const char* file, int line, const char* func ){
 	if( !session_isValid(fd) )
 		return 0;
 
 	if( session[fd]->max_rdata != rfifo_size && session[fd]->rdata_size < rfifo_size) {
-		RECREATE(session[fd]->rdata, unsigned char, rfifo_size);
+		RECREATE2( session[fd]->rdata, unsigned char, rfifo_size, file, line, func );
 		session[fd]->max_rdata  = rfifo_size;
 	}
 
 	if( session[fd]->max_wdata != wfifo_size && session[fd]->wdata_size < wfifo_size) {
-		RECREATE(session[fd]->wdata, unsigned char, wfifo_size);
+		RECREATE2( session[fd]->wdata, unsigned char, wfifo_size, file, line, func );
 		session[fd]->max_wdata  = wfifo_size;
 	}
 	return 0;
 }
 
-int realloc_writefifo(int fd, size_t addition)
-{
+int _realloc_writefifo( int fd, size_t addition, const char* file, int line, const char* func ){
 	size_t newsize;
 
 	if( !session_isValid(fd) ) // might not happen
@@ -784,7 +790,7 @@ int realloc_writefifo(int fd, size_t addition)
 	else // no change
 		return 0;
 
-	RECREATE(session[fd]->wdata, unsigned char, newsize);
+	RECREATE2( session[fd]->wdata, unsigned char, newsize, file, line, func );
 	session[fd]->max_wdata  = newsize;
 
 	return 0;
@@ -1621,7 +1627,7 @@ void socket_init(void)
 
 bool session_isValid(int fd)
 {
-	return ( fd > 0 && fd < MAXCONN && session[fd] != NULL );
+	return ( fd > 0 && fd < MAXCONN && session[fd] != nullptr );
 }
 
 bool session_isActive(int fd)
@@ -1690,10 +1696,7 @@ void send_shortlist_add_fd(int fd)
 // Do pending network sends and eof handling from the shortlist.
 void send_shortlist_do_sends()
 {
-	int i;
-
-	for( i = send_shortlist_count-1; i >= 0; --i )
-	{
+	for( int i = static_cast<int>( send_shortlist_count - 1 ); i >= 0; --i ){
 		int fd = send_shortlist_array[i];
 		int idx = fd/32;
 		int bit = fd%32;
@@ -1729,7 +1732,7 @@ void send_shortlist_do_sends()
 
 			// If the session still exists, is not eof and has things left to
 			// be sent from it we'll re-add it to the shortlist.
-			if( session[fd] && !session[fd]->flag.eof && session[fd]->wdata_size )
+			if( session_isActive(fd) && session[fd]->wdata_size )
 				send_shortlist_add_fd(fd);
 		}
 	}

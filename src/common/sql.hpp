@@ -4,7 +4,7 @@
 #ifndef SQL_HPP
 #define SQL_HPP
 
-#include <stdarg.h>// va_list
+#include <cstdarg>// va_list
 
 #include "cbasetypes.hpp"
 
@@ -65,6 +65,11 @@ typedef struct SqlStmt SqlStmt;
 
 /// Allocates and initializes a new Sql handle.
 struct Sql* Sql_Malloc(void);
+
+
+
+/// Retrieves the last error number.
+unsigned int Sql_GetError( Sql* self );
 
 
 

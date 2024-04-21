@@ -42,7 +42,8 @@
 #ifndef DB_HPP
 #define DB_HPP
 
-#include <stdarg.h>
+#include <cstdarg>
+#include <utility>
 
 #include "cbasetypes.hpp"
 
@@ -167,6 +168,7 @@ typedef enum DBDataType {
 	DB_DATA_INT,
 	DB_DATA_UINT,
 	DB_DATA_PTR,
+	DB_DATA_I64
 } DBDataType;
 
 /**
@@ -176,6 +178,7 @@ typedef enum DBDataType {
  * @param u.i Data of int type
  * @param u.ui Data of unsigned int type
  * @param u.ptr Data of void* type
+ * @param u.i64 Data of int64 type
  * @public
  */
 typedef struct DBData {
@@ -184,6 +187,7 @@ typedef struct DBData {
 		int i;
 		unsigned int ui;
 		void *ptr;
+		int64 i64;
 	} u;
 } DBData;
 
@@ -638,6 +642,14 @@ struct DBMap {
 #define i64db_uiget(db,k)  ( db_data2ui((db)->get((db),db_i642key(k))) )
 #define ui64db_uiget(db,k) ( db_data2ui((db)->get((db),db_ui642key(k))) )
 
+// Get int64-type data from DBMaps of various key types
+#define db_i64get(db,k)     ( db_data2i64((db)->get((db),(k))) )
+#define idb_i64get(db,k)    ( db_data2i64((db)->get((db),db_i2key(k))) )
+#define uidb_i64get(db,k)   ( db_data2i64((db)->get((db),db_ui2key(k))) )
+#define strdb_i64get(db,k)  ( db_data2i64((db)->get((db),db_str2key(k))) )
+#define i64db_i64get(db,k)  ( db_data2i64((db)->get((db),db_i642key(k))) )
+#define ui64db_i64get(db,k) ( db_data2i64((db)->get((db),db_ui642key(k))) )
+
 // Put pointer-type data into DBMaps of various key types
 #define db_put(db,k,d)     ( (db)->put((db),(k),db_ptr2data(d),NULL) )
 #define idb_put(db,k,d)    ( (db)->put((db),db_i2key(k),db_ptr2data(d),NULL) )
@@ -661,6 +673,14 @@ struct DBMap {
 #define strdb_uiput(db,k,d)  ( (db)->put((db),db_str2key(k),db_ui2data(d),NULL) )
 #define i64db_uiput(db,k,d)  ( (db)->put((db),db_i642key(k),db_ui2data(d),NULL) )
 #define ui64db_uiput(db,k,d) ( (db)->put((db),db_ui642key(k),db_ui2data(d),NULL) )
+
+// Put int64 data into DBMaps of various key types
+#define db_i64put(db,k,d)     ( (db)->put((db),(k),db_i642data(d),NULL) )
+#define idb_i64put(db,k,d)    ( (db)->put((db),db_i2key(k),db_i642data(d),NULL) )
+#define uidb_i64put(db,k,d)   ( (db)->put((db),db_ui2key(k),db_i642data(d),NULL) )
+#define strdb_i64put(db,k,d)  ( (db)->put((db),db_str2key(k),db_i642data(d),NULL) )
+#define i64db_i64put(db,k,d)  ( (db)->put((db),db_i642key(k),db_i642data(d),NULL) )
+#define ui64db_i64put(db,k,d) ( (db)->put((db),db_ui642key(k),db_i642data(d),NULL) )
 
 // Remove entry from DBMaps of various key types
 #define db_remove(db,k)     ( (db)->remove((db),(k),NULL) )
@@ -873,6 +893,14 @@ DBData db_ui2data(unsigned int data);
 DBData db_ptr2data(void *data);
 
 /**
+ * Manual cast from 'int64' to the struct DBData.
+ * @param data Data to be casted
+ * @return The data as a DBData struct
+ * @public
+ */
+DBData db_i642data(int64 data);
+
+/**
  * Gets int type data from struct DBData.
  * If data is not int type, returns 0.
  * @param data Data
@@ -898,6 +926,15 @@ unsigned int db_data2ui(DBData *data);
  * @public
  */
 void* db_data2ptr(DBData *data);
+
+/**
+ * Gets int64 type data from struct DBData.
+ * If data is not int64 type, returns 0.
+ * @param data Data
+ * @return Integer(64-bit signed) value of the data.
+ * @public
+ */
+int64 db_data2i64(DBData *data);
 
 /**
  * Initialize the database system.
@@ -1447,8 +1484,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 /// @param __heap Binary heap
 /// @param __val Value
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_PUSH(__heap,__val,__topcmp,__swp) \
+#define BHEAP_PUSH(__heap,__val,__topcmp) \
 	do{ \
 		size_t _i_ = VECTOR_LENGTH(__heap); \
 		VECTOR_PUSH(__heap,__val); /* insert at end */ \
@@ -1457,7 +1493,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 			size_t _parent_ = (_i_-1)/2; \
 			if( __topcmp(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i_)) < 0 ) \
 				break; /* done */ \
-			__swp(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i_)); \
+			std::swap(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i_)); \
 			_i_ = _parent_; \
 		} \
 	}while(0)
@@ -1469,12 +1505,11 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 /// @param __heap Binary heap
 /// @param __val Value
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_PUSH2(__heap,__val,__topcmp,__swp) \
+#define BHEAP_PUSH2(__heap,__val,__topcmp) \
 	do{ \
 		size_t _i_ = VECTOR_LENGTH(__heap); \
 		VECTOR_PUSH(__heap,__val); /* insert at end */ \
-		BHEAP_SIFTDOWN(__heap,0,_i_,__topcmp,__swp); \
+		BHEAP_SIFTDOWN(__heap,0,_i_,__topcmp); \
 	}while(0)
 
 
@@ -1489,8 +1524,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 ///
 /// @param __heap Binary heap
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_POP(__heap,__topcmp,__swp) BHEAP_POPINDEX(__heap,0,__topcmp,__swp)
+#define BHEAP_POP(__heap,__topcmp) BHEAP_POPINDEX(__heap,0,__topcmp)
 
 
 
@@ -1498,13 +1532,12 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 ///
 /// @param __heap Binary heap
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_POP2(__heap,__topcmp,__swp) \
+#define BHEAP_POP2(__heap,__topcmp) \
 	do{ \
 		VECTOR_INDEX(__heap,0) = VECTOR_POP(__heap); /* put last at index */ \
 		if( !VECTOR_LENGTH(__heap) ) /* removed last, nothing to do */ \
 			break; \
-		BHEAP_SIFTUP(__heap,0,__topcmp,__swp); \
+		BHEAP_SIFTUP(__heap,0,__topcmp); \
 	}while(0)
 
 
@@ -1520,8 +1553,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 /// @param __heap Binary heap
 /// @param __idx Index
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_POPINDEX(__heap,__idx,__topcmp,__swp) \
+#define BHEAP_POPINDEX(__heap,__idx,__topcmp) \
 	do{ \
 		size_t _i_ = __idx; \
 		VECTOR_INDEX(__heap,__idx) = VECTOR_POP(__heap); /* put last at index */ \
@@ -1532,7 +1564,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 			size_t _parent_ = (_i_-1)/2; \
 			if( __topcmp(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i_)) < 0 ) \
 				break; /* done */ \
-			__swp(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i_)); \
+			std::swap(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i_)); \
 			_i_ = _parent_; \
 		} \
 		while( _i_ < VECTOR_LENGTH(__heap) ) \
@@ -1544,12 +1576,12 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 				break; /* done */ \
 			else if( _rchild_ >= VECTOR_LENGTH(__heap) || __topcmp(VECTOR_INDEX(__heap,_lchild_),VECTOR_INDEX(__heap,_rchild_)) <= 0 ) \
 			{ /* left child */ \
-				__swp(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_lchild_)); \
+				std::swap(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_lchild_)); \
 				_i_ = _lchild_; \
 			} \
 			else \
 			{ /* right child */ \
-				__swp(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_rchild_)); \
+				std::swap(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_rchild_)); \
 				_i_ = _rchild_; \
 			} \
 		} \
@@ -1565,8 +1597,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 /// @param __startidx Index of an ancestor of __idx
 /// @param __idx Index of an inserted element
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_SIFTDOWN(__heap,__startidx,__idx,__topcmp,__swp) \
+#define BHEAP_SIFTDOWN(__heap,__startidx,__idx,__topcmp) \
 	do{ \
 		size_t _i2_ = __idx; \
 		while( _i2_ > __startidx ) \
@@ -1574,7 +1605,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 			size_t _parent_ = (_i2_-1)/2; \
 			if( __topcmp(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i2_)) <= 0 ) \
 				break; /* done */ \
-			__swp(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i2_)); \
+			std::swap(VECTOR_INDEX(__heap,_parent_),VECTOR_INDEX(__heap,_i2_)); \
 			_i2_ = _parent_; \
 		} \
 	}while(0)
@@ -1586,8 +1617,7 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 /// @param __heap Binary heap
 /// @param __idx Index of an inserted element
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_SIFTUP(__heap,__idx,__topcmp,__swp) \
+#define BHEAP_SIFTUP(__heap,__idx,__topcmp) \
 	do{ \
 		size_t _i_ = __idx; \
 		size_t _lchild_ = _i_*2 + 1; \
@@ -1596,17 +1626,17 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 			size_t _rchild_ = _i_*2 + 2; \
 			if( _rchild_ >= VECTOR_LENGTH(__heap) || __topcmp(VECTOR_INDEX(__heap,_lchild_),VECTOR_INDEX(__heap,_rchild_)) < 0 ) \
 			{ /* left child */ \
-				__swp(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_lchild_)); \
+				std::swap(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_lchild_)); \
 				_i_ = _lchild_; \
 			} \
 			else \
 			{ /* right child */ \
-				__swp(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_rchild_)); \
+				std::swap(VECTOR_INDEX(__heap,_i_),VECTOR_INDEX(__heap,_rchild_)); \
 				_i_ = _rchild_; \
 			} \
 			_lchild_ = _i_*2 + 1; \
 		} \
-		BHEAP_SIFTDOWN(__heap,__idx,_i_,__topcmp,__swp); \
+		BHEAP_SIFTDOWN(__heap,__idx,_i_,__topcmp); \
 	}while(0)
 
 
@@ -1616,11 +1646,10 @@ void  linkdb_foreach (struct linkdb_node** head, LinkDBFunc func, ...);
 /// @param __heap Binary heap
 /// @param __idx Index
 /// @param __topcmp Comparator
-/// @param __swp Swapper
-#define BHEAP_UPDATE(__heap,__idx,__topcmp,__swp) \
+#define BHEAP_UPDATE(__heap,__idx,__topcmp) \
 	do{ \
-		BHEAP_SIFTDOWN(__heap,0,__idx,__topcmp,__swp); \
-		BHEAP_SIFTUP(__heap,__idx,__topcmp,__swp); \
+		BHEAP_SIFTDOWN(__heap,0,__idx,__topcmp); \
+		BHEAP_SIFTUP(__heap,__idx,__topcmp); \
 	}while(0)
 
 
